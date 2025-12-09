@@ -1,0 +1,32 @@
+# Ignore virtual environments
+venv/
+venv_310/
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore temp files
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore media files
+*.mp4
+*.wav
+*.m4a
+*.avi
+*.mov
+
+# Ignore large model directories
+models/
+host_voice/
+hostsample.*
+temp_*.*
+mp4
+
+# Ignore DeepFace downloads
+~/.deepface/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
