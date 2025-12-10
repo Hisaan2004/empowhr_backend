@@ -1,23 +1,25 @@
 # BLOCK TensorFlow + GPU libs + heavy OpenCV
-tensorflow==0.0.0
-tensorflow-intel==0.0.0
-tensorflow-io-gcs-filesystem==0.0.0
-tensorflow-estimator==0.0.0
-keras==0.0.0
-jax==0.0.0
-jaxlib==0.0.0
-nvidia-cublas-cu11==0.0.0
-nvidia-cuda-runtime-cu11==0.0.0
-nvidia-cudnn-cu11==0.0.0
-nvidia-curand-cu11==0.0.0
-nvidia-cusolver-cu11==0.0.0
-nvidia-cusparse-cu11==0.0.0
-nvidia-nvtx-cu11==0.0.0
-nvidia-cuda-cupti-cu11==0.0.0
-opencv-contrib-python==0.0.0
-opencv-python==0.0.0
+# BLOCK TensorFlow, Keras, Jax, CUDA and heavy OpenCV
+tensorflow<0
+tensorflow-intel<0
+tensorflow-io-gcs-filesystem<0
+tensorflow-estimator<0
+keras<0
+jax<0
+jaxlib<0
+opencv-python<0
+opencv-contrib-python<0
+nvidia-cublas-cu11<0
+nvidia-cuda-runtime-cu11<0
+nvidia-cudnn-cu11<0
+nvidia-curand-cu11<0
+nvidia-cusolver-cu11<0
+nvidia-cusparse-cu11<0
+nvidia-nvtx-cu11<0
+nvidia-cuda-cupti-cu11<0
 
-# REAL DEPENDENCIES START HERE
+
+# REAL DEPENDENCIES BELOW
 fastapi==0.110.0
 uvicorn==0.23.2
 python-dotenv==1.0.1
@@ -45,6 +47,7 @@ retina-face==0.0.17
 torch==2.0.1
 torchaudio==2.0.2
 torchvision==0.15.2
+
 transformers==4.36.2
 tokenizers==0.15.2
 huggingface-hub==0.36.0
