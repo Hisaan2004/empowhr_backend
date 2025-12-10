@@ -1288,7 +1288,7 @@ from difflib import SequenceMatcher
 # -----------------------------
 # CONSTANTS
 # -----------------------------
-LOCAL_MODEL = "models/wav2vec2-large-robust"#models/wav2vec2-base-960h
+LOCAL_MODEL = "facebook/wav2vec2-large-robust"#"models/wav2vec2-large-robust"#models/wav2vec2-base-960h
 CLASSIC_FILLERS = ["um", "uh", "uhh", "uhm", "erm", "hmm", "mmm","ah","ahh"]
 HOST_EMB_PATH = os.path.join("models", "host_embedding.npy")
 BUCKET_NAME="video"
@@ -1301,73 +1301,6 @@ _silero_utils = None
 from spellchecker import SpellChecker
 spell = SpellChecker()
 
-'''
-def fix_word_errors(text: str):
-    """
-    Fixes split words (up plying → applying),
-    ASR errors (simis → semester),
-    and common mis-hearings.
-    """
-
-    words = text.split()
-    fixed = []
-
-    # Custom replacements for ASR weaknesses
-    CUSTOM_FIXES = {
-        "simis": "semester",
-        "simiss": "semester",
-        "trole": "role",
-        "upplying": "applying",
-        "up plying": "applying",
-        "expedience": "experience",
-        "oncludes": "concludes",
-        "on clude s": "concludes",
-        "cut ent ly": "currently",
-        "cut ently": "currently",
-        "f i p": "fyp",  # domain-specific
-    }
-
-    # First pass: join split words like "up plying"
-    joined = []
-    skip = False
-    for i in range(len(words)):
-        if skip:
-            skip = False
-            continue
-
-        two = words[i]
-        if i + 1 < len(words):
-            two = words[i] + words[i+1]
-            if two.lower().replace(" ", "") in [k.replace(" ", "") for k in CUSTOM_FIXES]:
-                joined.append(two)
-                skip = True
-                continue
-
-        joined.append(words[i])
-
-    # Second pass: apply custom corrections
-    for w in joined:
-        w_clean = w.lower().strip()
-
-        found = False
-        for bad, good in CUSTOM_FIXES.items():
-            if w_clean.replace(" ", "") == bad.replace(" ", ""):
-                fixed.append(good)
-                found = True
-                break
-
-        if found:
-            continue
-
-        # Autocorrect only for words > 3 letters
-        if len(w_clean) > 3:
-            corrected = spell.correction(w_clean)
-            fixed.append(corrected)
-        else:
-            fixed.append(w)
-
-    return " ".join(fixed)
-'''
 def fix_word_errors(text: str):
     words = text.split()
     fixed = []
@@ -1578,72 +1511,7 @@ def ninja_split(text: str):
         else:
             words.append(w)
     return " ".join(words)
-'''
-# -----------------------------
-# FINAL HOST REMOVAL FUNCTION (Correct!)
-# -----------------------------
-def filter_participant_with_host(
-    audio: np.ndarray,
-    sr: int,
-    processor: Wav2Vec2Processor,
-    model: Wav2Vec2ForCTC,
-    host_emb: torch.Tensor,
-    host_sentences: list = None,
-    min_segment_duration: float = 0.3,
-    host_threshold: float = 0.90,
-):
-    silero_model, utils = get_silero_vad()
-    (get_speech_timestamps,
-     save_audio,
-     read_audio,
-     VADIterator,
-     collect_chunks) = utils
 
-    int_audio = (audio * 32767).astype(np.int16)
-    timestamps = get_speech_timestamps(int_audio, silero_model, sampling_rate=sr)
-
-    participant_chunks = []
-
-    for ts in timestamps:
-        start, end = ts["start"], ts["end"]
-        dur = (end - start) / sr
-        if dur < min_segment_duration:
-            continue
-
-        segment = audio[start:end]
-
-        # ------------------ TRANSCRIBE SEGMENT ------------------
-        inputs = processor(segment, sampling_rate=sr, return_tensors="pt")
-        with torch.no_grad():
-            logits = model(inputs.input_values).logits
-
-        pred_ids = torch.argmax(logits, dim=-1)
-        transcript = processor.decode(pred_ids[0]).lower().strip()
-
-        # ------------------ HOST TEXT MATCH --------------------
-        if host_sentences:
-            if is_host_sentence(transcript, host_sentences):
-                print(f"🚫 Removed host text: {transcript}")
-                continue
-
-        # ------------------ HOST VOICE MATCH -------------------
-        if host_emb is not None:
-            seg_emb = compute_wav2vec_embedding(segment, sr, processor, model)
-            sim = torch.dot(seg_emb, host_emb).item()
-
-            if sim >= host_threshold:
-                print(f"🚫 Removed host audio (sim={sim:.2f})")
-                continue
-
-        # Passed → participant
-        participant_chunks.append(segment)
-    '''
-'''
-    if len(participant_chunks) == 0:
-            print("⚠️ No participant segments detected, returning silence instead of full audio.")
-            return np.zeros(1600, dtype=np.float32)  # 0.1 sec of silence
-
-'''
 
 CUSTOM_FIXES = {
     "cut ent ly": "currently",
@@ -1659,57 +1527,7 @@ CUSTOM_FIXES = {
     "expedience": "experience",
     "trole": "role",
 }
-'''
-def fix_transcript(text: str):
-    words = text.split()
 
-    # ---------- FIRST PASS: join split words ----------
-    joined = []
-    skip = False
-    for i in range(len(words)):
-        if skip:
-            skip = False
-            continue
-
-        # attempt joining current + next
-        if i + 1 < len(words):
-            combined = words[i] + " " + words[i+1]
-            combined_cmp = combined.replace(" ", "").lower()
-
-            for bad in CUSTOM_FIXES:
-                if combined_cmp == bad.replace(" ", ""):
-                    joined.append(CUSTOM_FIXES[bad])
-                    skip = True
-                    break
-            if skip:
-                continue
-
-        joined.append(words[i])
-
-    # ---------- SECOND PASS: apply custom corrections ----------
-    corrected = []
-    for w in joined:
-        w_clean = w.lower().strip()
-
-        # direct mapping
-        for bad, good in CUSTOM_FIXES.items():
-            if w_clean.replace(" ", "") == bad.replace(" ", ""):
-                corrected.append(good)
-                break
-        else:
-            # leave names uncorrected (good heuristic)
-            if w_clean in ["santa", "havoc", "havot", "hafeez", "sana"]:
-                corrected.append(w)
-                continue
-
-            # autocorrect English words >3 letters
-            if len(w_clean) > 3:
-                corrected.append(spell.correction(w_clean))
-            else:
-                corrected.append(w)
-
-    return " ".join(corrected)
-'''
 def fix_transcript(text: str):
     words = text.split()
 
@@ -1788,73 +1606,7 @@ def remove_host_phrases(final_text: str):
 
     return t
 
-'''
-def filter_participant_with_host(
-    audio: np.ndarray,
-    sr: int,
-    processor: Wav2Vec2Processor,
-    model: Wav2Vec2ForCTC,
-    host_sentences: list,
-    min_segment_duration: float = 0.3,
-    host_text_threshold: float = 0.550,   # ONLY text-based removal
-):
-    """
-    Remove host's speech based purely on text similarity.
-    No embedding-based filtering.
-    """
 
-    silero_model, utils = get_silero_vad()
-    (get_speech_timestamps,
-     save_audio,
-     read_audio,
-     VADIterator,
-     collect_chunks) = utils
-
-    # Convert to int16 for Silero
-    int_audio = (audio * 32767).astype(np.int16)
-    timestamps = get_speech_timestamps(int_audio, silero_model, sampling_rate=sr)
-
-    participant_segments = []
-
-    for ts in timestamps:
-        start, end = ts["start"], ts["end"]
-        duration = (end - start) / sr
-        if duration < min_segment_duration:
-            continue
-
-        segment = audio[start:end]
-
-        # ---------------------------
-        # TRANSCRIBE THIS SEGMENT
-        # ---------------------------
-        inputs = processor(segment, sampling_rate=sr, return_tensors="pt")
-        with torch.no_grad():
-            logits = model(inputs.input_values).logits
-
-        pred_ids = torch.argmax(logits, dim=-1)
-        text = processor.decode(pred_ids[0]).lower().strip()
-
-        if len(text) == 0:
-            continue
-
-        # ---------------------------
-        # CHECK IF HOST SPOKE THIS
-        # ---------------------------
-        for host_line in host_sentences:
-            similarity = SequenceMatcher(None, text, host_line.lower()).ratio()
-
-            if similarity >= host_text_threshold:
-                print(f"🛑 Removed HOST segment: '{text}' (sim={similarity:.2f})")
-                break
-        else:
-            # This segment is NOT host → keep it
-            participant_segments.append(segment)
-
-    if len(participant_segments) == 0:
-        print("⚠️ No participant speech detected — returning original audio.")
-        return audio
-
-    return np.concatenate(participant_segments).astype(np.float32)'''
 def filter_participant_with_host(
     audio: np.ndarray,
     sr: int,
@@ -1951,111 +1703,6 @@ def extract_wav(video_path, output="temp_audio.wav"):
 
     return output
 
-
-# -----------------------------
-# SILENCE DETECTOR
-# -----------------------------
-'''
-class SilenceDetector:
-    def _init_(self, threshold=0.015, frame_ms=20):
-        self.threshold = threshold
-        self.frame_ms = frame_ms
-
-    def detect(self, audio, sr):
-        frame_size = int((self.frame_ms / 1000) * sr)
-        voiced = silence = 0.0
-
-        for i in range(0, len(audio), frame_size):
-            frame = audio[i:i+frame_size]
-            if len(frame) == 0:
-                continue
-
-            rms = np.sqrt(np.mean(frame**2))
-            if rms > self.threshold:
-                voiced += frame_size / sr
-            else:
-                silence += frame_size / sr
-
-        return voiced, silence
-
-
-# -----------------------------
-# MAIN ANALYZER
-# -----------------------------
-class FillerDetector:
-    def _init_(self):
-        print("📥 Loading Wav2Vec2 model...")
-        self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL,local_files_only=True)
-        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL,local_files_only=True)
-        self.silence = SilenceDetector()
-        self.host_embedding = load_host_embedding()
-
-    def analyze(self, audio_path):
-        audio, sr = librosa.load(audio_path, sr=16000)
-
-        # Remove host
-        
-        audio = filter_participant_with_host(
-            audio=audio,
-            sr=sr,
-            processor=self.processor,
-            model=self.model,
-            host_sentences=[
-                "welcome to the interview",
-                "please introduce yourself",
-                "why are you interested in this role",
-                "what relevant experience do you have?",
-                "thank you this concludes our interview",
-                #"thank you for joining",
-            ],
-            min_segment_duration=0.3,
-            host_text_threshold=0.55,
-        )
-
-        # ASR on participant-only audio
-        inputs = self.processor(audio, sampling_rate=16000, return_tensors="pt")
-
-        with torch.no_grad():
-            logits = self.model(inputs.input_values).logits
-
-        pred_ids = torch.argmax(logits, dim=-1)
-        transcript = self.processor.decode(pred_ids[0]).lower()
-        transcript = clean_spacing(transcript)
-        transcript = ninja_split(transcript)
-        transcript = smart_split(transcript)
-        transcript = fix_transcript(transcript)
-        transcript = fix_word_errors(transcript)
-        transcript = remove_host_phrases(transcript)
-        #transcript = clean_spacing(transcript)
-        words = transcript.split()
-
-        classic_counts = {f: transcript.count(f) for f in CLASSIC_FILLERS}
-        classic_total = sum(classic_counts.values())
-
-        repeated_words = [
-            words[i] for i in range(len(words)-1) if words[i] == words[i+1]
-        ]
-        repeated_total = len(repeated_words)
-
-        voiced, silence = self.silence.detect(audio, sr)
-        total_time = voiced + silence
-
-        speech_rate_wps = len(words) / max(voiced, 0.001)
-        speech_rate_wpm = speech_rate_wps * 60
-
-        return {
-            "transcript": transcript,
-            "classic_fillers": classic_counts,
-            "repeated_word_fillers": repeated_words,
-            "total_fillers": classic_total + repeated_total,
-            "voiced_time": round(voiced, 2),
-            "silence_time": round(silence, 2),
-            "total_time": round(total_time, 2),
-            "speech_rate_wpm": round(speech_rate_wpm, 2),
-            "pause_ratio": round(silence / max(total_time, 0.001), 3),
-            "filler_ratio": round((classic_total + repeated_total) / max(len(words), 1), 3),
-        }
-        '''
 class SilenceDetector:
     def __init__(self, threshold=0.015, frame_ms=20):
         self.threshold = threshold
@@ -2085,8 +1732,10 @@ class SilenceDetector:
 class FillerDetector:
     def __init__(self):
         print("📥 Loading Wav2Vec2 model...")
-        self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=True)
-        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=True)
+        '''self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=True)
+        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=True)'''
+        self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=False)
+        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=False)
         self.silence = SilenceDetector()
         self.host_embedding = load_host_embedding()
 
