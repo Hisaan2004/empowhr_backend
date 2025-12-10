@@ -23,11 +23,12 @@ numba==0.62.1
 librosa==0.10.1
 soundfile==0.12.1
 sounddevice==0.5.3
-mediapipe==0.10.8
+
 deepface==0.0.79
+opencv-python-headless==4.7.0.72
 mtcnn==0.1.1
 retina-face==0.0.17
-opencv-python-headless==4.7.0.72
+
 wordninja==2.0.0
 tqdm==4.64.1
 transformers==4.36.2
