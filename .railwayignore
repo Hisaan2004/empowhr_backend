@@ -1,0 +1,21 @@
+# Ignore virtual env
+venv/
+.venv/
+
+# Ignore local model caches
+models/
+.cache/
+huggingface/
+transformers/
+torch_cache/
+
+# Ignore large build artifacts
+__pycache__/
+*.pth
+*.pt
+*.bin
+*.onnx
+
+# Ignore OS junk
+.DS_Store
+Thumbs.db
