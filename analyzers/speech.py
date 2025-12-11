@@ -1288,7 +1288,7 @@ from difflib import SequenceMatcher
 # -----------------------------
 # CONSTANTS
 # -----------------------------
-LOCAL_MODEL = "facebook/wav2vec2-large-robust"#"models/wav2vec2-large-robust"#models/wav2vec2-base-960h
+LOCAL_MODEL = "models/wav2vec2-large-robust"#models/wav2vec2-base-960h
 CLASSIC_FILLERS = ["um", "uh", "uhh", "uhm", "erm", "hmm", "mmm","ah","ahh"]
 HOST_EMB_PATH = os.path.join("models", "host_embedding.npy")
 BUCKET_NAME="video"
@@ -1526,6 +1526,8 @@ CUSTOM_FIXES = {
     "up plying": "applying",
     "expedience": "experience",
     "trole": "role",
+    "f i p": "fyp",
+    "fip": "fyp",  
 }
 
 def fix_transcript(text: str):
@@ -1732,13 +1734,13 @@ class SilenceDetector:
 class FillerDetector:
     def __init__(self):
         print("📥 Loading Wav2Vec2 model...")
-        '''self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=True)
-        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=True)'''
-        self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=False)
-        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=False)
+        self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=True)
+        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=True)
+        '''self.processor = Wav2Vec2Processor.from_pretrained(LOCAL_MODEL, local_files_only=False)
+        self.model = Wav2Vec2ForCTC.from_pretrained(LOCAL_MODEL, local_files_only=False)'''
         self.silence = SilenceDetector()
         self.host_embedding = load_host_embedding()
-
+    '''
     def analyze(self, audio_path):
         audio, sr = librosa.load(audio_path, sr=16000)
 
@@ -1804,4 +1806,68 @@ class FillerDetector:
             "speech_rate_wpm": round(speech_rate_wpm, 2),
             "pause_ratio": round(silence / max(total_time, 0.001), 3),
             "filler_ratio": round((classic_total + repeated_total) / max(len(words), 1), 3),
+        }'''
+
+    def analyze_with_custom_hosts(self, audio_path, host_sentences):
+        audio, sr = librosa.load(audio_path, sr=16000)
+
+        # Remove host using dynamic interview questions
+        audio = filter_participant_with_host(
+            audio=audio,
+            sr=sr,
+            processor=self.processor,
+            model=self.model,
+            host_sentences=host_sentences,
+            min_segment_duration=0.3,
+            host_text_threshold=0.55,
+        )
+
+        return self._final_speech_analysis(audio)
+    # ----------------------------------------
+    # 🔥 NEW INTERNAL FUNCTION: Shared speech analysis
+    # ----------------------------------------
+    def _final_speech_analysis(self, audio):
+        inputs = self.processor(audio, sampling_rate=16000, return_tensors="pt")
+
+        with torch.no_grad():
+            logits = self.model(inputs.input_values).logits
+
+        pred_ids = torch.argmax(logits, dim=-1)
+        transcript = self.processor.decode(pred_ids[0]).lower()
+
+        # Cleaning pipeline
+        transcript = clean_spacing(transcript)
+        transcript = ninja_split(transcript)
+        transcript = smart_split(transcript)
+        transcript = fix_transcript(transcript)
+        transcript = fix_word_errors(transcript)
+        transcript = remove_host_phrases(transcript)
+
+        words = transcript.split()
+
+        # Fillers
+        classic_counts = {f: transcript.count(f) for f in CLASSIC_FILLERS}
+        classic_total = sum(classic_counts.values())
+
+        repeated_words = [words[i] for i in range(len(words)-1) if words[i] == words[i+1]]
+        repeated_total = len(repeated_words)
+
+        voiced, silence = self.silence.detect(audio, 16000)
+        total_time = voiced + silence
+
+        speech_rate_wps = len(words) / max(voiced, 0.001)
+        speech_rate_wpm = speech_rate_wps * 60
+
+        return {
+            "transcript": transcript,
+            "classic_fillers": classic_counts,
+            "repeated_word_fillers": repeated_words,
+            "total_fillers": classic_total + repeated_total,
+            "voiced_time": round(voiced, 2),
+            "silence_time": round(silence, 2),
+            "total_time": round(total_time, 2),
+            "speech_rate_wpm": round(speech_rate_wpm, 2),
+            "pause_ratio": round(silence / max(total_time, 0.001), 3),
+            "filler_ratio": round((classic_total + repeated_total) / max(len(words), 1), 3),
         }
+

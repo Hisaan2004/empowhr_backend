@@ -113,7 +113,7 @@ def analyze_attention(video_path):
 
                 gaze = (left + right) / 2 - nose
 
-                status = "attentive" if abs(gaze[0]) < 0.15 and abs(gaze[1]) < 0.15 else "distracted"
+                status = "attentive" if abs(gaze[0]) < 0.25 and abs(gaze[1]) < 0.25 else "distracted"
             else:
                 status = "no_face"
 
